@@ -6,9 +6,8 @@
 
 template <typename T, std::size_t Capacity>
 class RingBuffer {
-    static_assert(Capacity > 0, "Capacity must be greater than 0");
-
-public:
+    static_assert(Capacity > 1, "Capacity must be greater than 1");
+public: 
     RingBuffer() = default;
 
     using value_type = T;
