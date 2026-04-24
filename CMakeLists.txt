@@ -10,3 +10,9 @@ add_executable(ring_buffer_demo
 )
 
 target_include_directories(ring_buffer_demo PRIVATE include)
+
+add_executable(ring_buffer_benchmark
+    benchmarks/benchmark.cpp
+)
+
+target_include_directories(ring_buffer_benchmark PRIVATE include)
