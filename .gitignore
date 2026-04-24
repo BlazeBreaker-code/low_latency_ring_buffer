@@ -1,0 +1,17 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.exe
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
