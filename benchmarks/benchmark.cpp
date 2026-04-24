@@ -6,50 +6,59 @@
 
 #include "ring_buffer.hpp"
 
-template <typename T>
+template<typename T>
 class MutexQueue {
-public:
-    bool try_push(const T& item) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push(item);
-        return true;
-    }
+    public:
+        using value_type = T;
 
-    bool try_pop(T& item) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!queue_.empty()) {
-            item = queue_.front();
-            queue_.pop();
+        bool try_push(const T& item) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            queue_.push(item);
             return true;
         }
-        return false;
-    }
 
-private:
-    std::queue<T> queue_;
-    std::mutex mutex_;
+        bool try_pop(T& out) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!queue_.empty()) {
+                out = queue_.front(); queue_.pop();
+                return true;
+            }
+
+            return false;
+        }
+
+    private:
+        std::queue<T> queue_;
+        std::mutex mutex_;
 };
 
-template <typename Queue>
+template<typename QueueType>
 double run_single_throughput_test() {
+    using ValueType = typename QueueType::value_type;
     const size_t N = 1'000'000;
-    Queue queue;
+    QueueType queue;
+
+    std::atomic<std::size_t> failedPushes{0};
+    std::atomic<std::size_t> failedPops{0};
 
     auto start = std::chrono::high_resolution_clock::now();
     std::thread producer([&]() {
-        for (size_t i = 0; i < N; ++i) {
-            while (!queue.try_push(static_cast<int>(i))) {
-                // Busy wait until push is successful
+        for (std::size_t i = 0; i < N; ++i) {
+            while (!queue.try_push(static_cast<ValueType>(i))) {
+                // Busy waiting until push is successful
+                failedPushes.fetch_add(1, std::memory_order_relaxed);
             }
         }
     });
 
     std::thread consumer([&]() {
-        size_t count = 0;
+        std::size_t count = 0;
         int value;
         while (count < N) {
             if (queue.try_pop(value)) {
                 ++count;
+            } else {
+                failedPops.fetch_add(1, std::memory_order_relaxed);
             }
         }
     });
@@ -59,21 +68,24 @@ double run_single_throughput_test() {
 
     auto end = std::chrono::high_resolution_clock::now();
     double seconds = std::chrono::duration<double>(end - start).count();
-    
-   return N / seconds; // Return throughput in items per second
+
+    std::cout << "  failed pushes: " << failedPushes.load() << '\n';
+    std::cout << "  failed pops:   " << failedPops.load() << '\n';
+
+    return N / seconds;
 }
 
-template <typename Queue>
-void run_throughput_test(const std::string& name, int iterations = 5) {
+template<typename QueueType>
+void run_throughput_test(std::string name, int iterations = 5) {
     double total = 0.0;
-    for (int i = 0; i < iterations; ++i) {  
-        double throughput = run_single_throughput_test<Queue>();
-        std::cout << name << " run " << (i + 1) << " -> " << throughput << " ops/sec\n";
-        total += throughput;
+    for (int i = 0; i < iterations; ++i) {
+        double throughput = run_single_throughput_test<QueueType>();
+        std::cout << name << " run " << (i + 1) << " -> " << throughput <<  " ops/sec\n";
+        total += throughput; 
     }
-    
+
     double average = total / iterations;
-    std::cout << name << " average throughput: " << average << " ops/sec\n\n";
+    std::cout << name << " avg throughput: " << average << " ops/sec\n\n";
 }
 
 int main() {
@@ -83,4 +95,4 @@ int main() {
     run_throughput_test<RingBuffer<int, 8192>>("RingBuffer 8192");
     run_throughput_test<MutexQueue<int>>("MutexQueue");
     return 0;
-}   
+}
