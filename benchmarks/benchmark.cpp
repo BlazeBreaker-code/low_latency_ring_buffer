@@ -46,6 +46,7 @@ double run_single_throughput_test() {
         for (std::size_t i = 0; i < N; ++i) {
             while (!queue.try_push(static_cast<ValueType>(i))) {
                 // Busy waiting until push is successful
+                std::this_thread::yield();
                 failedPushes.fetch_add(1, std::memory_order_relaxed);
             }
         }
@@ -58,6 +59,7 @@ double run_single_throughput_test() {
             if (queue.try_pop(value)) {
                 ++count;
             } else {
+                std::this_thread::yield();
                 failedPops.fetch_add(1, std::memory_order_relaxed);
             }
         }
