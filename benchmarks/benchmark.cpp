@@ -31,14 +31,14 @@ private:
 };
 
 template <typename Queue>
-void run_throughput_test(const std::string& name) {
+double run_single_throughput_test() {
     const size_t N = 1'000'000;
     Queue queue;
 
     auto start = std::chrono::high_resolution_clock::now();
     std::thread producer([&]() {
         for (size_t i = 0; i < N; ++i) {
-            while (!queue.try_push(i)) {
+            while (!queue.try_push(static_cast<int>(i))) {
                 // Busy wait until push is successful
             }
         }
@@ -56,16 +56,31 @@ void run_throughput_test(const std::string& name) {
 
     producer.join();
     consumer.join();
-    auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration<double>(end - start).count();
-    double throughput = N / duration;
+    auto end = std::chrono::high_resolution_clock::now();
+    double seconds = std::chrono::duration<double>(end - start).count();
     
-    std::cout << name << " -> " << throughput << " ops/sec" << std::endl;
+   return N / seconds; // Return throughput in items per second
+}
+
+template <typename Queue>
+void run_throughput_test(const std::string& name, int iterations = 5) {
+    double total = 0.0;
+    for (int i = 0; i < iterations; ++i) {  
+        double throughput = run_single_throughput_test<Queue>();
+        std::cout << name << " run " << (i + 1) << " -> " << throughput << " ops/sec\n";
+        total += throughput;
+    }
+    
+    double average = total / iterations;
+    std::cout << name << " average throughput: " << average << " ops/sec\n\n";
 }
 
 int main() {
-    run_throughput_test<RingBuffer<int, 1024>>("RingBuffer");
+    run_throughput_test<RingBuffer<int, 64>>("RingBuffer 64");
+    run_throughput_test<RingBuffer<int, 256>>("RingBuffer 256");
+    run_throughput_test<RingBuffer<int, 1024>>("RingBuffer 1024");
+    run_throughput_test<RingBuffer<int, 8192>>("RingBuffer 8192");
     run_throughput_test<MutexQueue<int>>("MutexQueue");
     return 0;
 }   
