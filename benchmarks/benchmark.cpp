@@ -18,6 +18,30 @@ struct TimedMessage {
     std::size_t sequence;
 };
 
+enum class WaitStrategy {
+    Spin,
+    Yield, 
+    SpinThenYield
+};
+
+void apply_wait_strategy(WaitStrategy strategy, std::size_t& spins) {
+    switch(strategy) {
+        case WaitStrategy::Spin:
+            return;
+
+        case WaitStrategy::Yield:
+            std::this_thread::yield();
+            return;
+        
+        case WaitStrategy::SpinThenYield: 
+            if (++spins >= 100) {
+                std::this_thread::yield();
+                spins = 0;
+            }
+            return;
+    }
+}
+
 double percentile_ns(const std::vector<double>& sortedSamples, double percentile) {
     if (sortedSamples.empty()) return 0.0;
 
@@ -48,7 +72,7 @@ void print_result(const std::string& name, const BenchmarkResult& result) {
 }
 
 template<typename QueueType>
-BenchmarkResult run_single_latency_test() {
+BenchmarkResult run_single_latency_test(WaitStrategy strategy) {
     using ValueType = typename QueueType::value_type;
 
     constexpr std::size_t N = 1'000'000;
@@ -70,15 +94,17 @@ BenchmarkResult run_single_latency_test() {
                 ValueType::clock::now(), 
                 i
             };
-
+            
+            std::size_t spins = 0;
             while (!queue.try_push(msg)) {
                 failedPushes.fetch_add(1, std::memory_order_relaxed);
+                apply_wait_strategy(strategy, spins);
             }
         }
     });
 
     std::thread consumer([&]() {
-        std::size_t consumed = 0;
+        std::size_t consumed = 0, spins = 0;
         ValueType msg{};
         
         while (consumed < N) {
@@ -90,6 +116,7 @@ BenchmarkResult run_single_latency_test() {
                 ++consumed;
             } else {
                 failedPops.fetch_add(1, std::memory_order_relaxed);
+                apply_wait_strategy(strategy, spins);
             }
         }
     });
@@ -153,16 +180,16 @@ BenchmarkResult average_results(const std::vector<BenchmarkResult>& results) {
 }
 
 template<typename QueueType>
-void run_latency_benchmark(const std::string& name, int warmups = 2, int iterations = 5) {
+void run_latency_benchmark(const std::string& name, WaitStrategy strategy, int warmups = 2, int iterations = 5) {
     for (int i = 0; i < warmups; ++i) {
-        (void)run_single_latency_test<QueueType>();
+        (void)run_single_latency_test<QueueType>(strategy);
     }
 
     std::vector<BenchmarkResult> results;
     results.reserve(iterations);
 
     for (int i = 0; i < iterations; ++i) {
-        auto result = run_single_latency_test<QueueType>();
+        auto result = run_single_latency_test<QueueType>(strategy);
         results.push_back(result);
 
         print_result(name + " run " + std::to_string(i + 1), result);
@@ -175,7 +202,7 @@ void run_latency_benchmark(const std::string& name, int warmups = 2, int iterati
 }
 
 template<typename QueueType>
-ThroughputResult run_single_throughput_test() {
+ThroughputResult run_single_throughput_test(WaitStrategy strategy) {
     using ValueType = typename QueueType::value_type;
     const std::size_t N = 1'000'000;
     QueueType queue;
@@ -186,23 +213,25 @@ ThroughputResult run_single_throughput_test() {
     auto start = std::chrono::steady_clock::now();
     std::thread producer([&]() {
         for (std::size_t i = 0; i < N; ++i) {
+            std::size_t spins = 0;
+            
             while (!queue.try_push(static_cast<ValueType>(i))) {
                 // Busy waiting until push is successful
-                std::this_thread::yield();
                 failedPushes.fetch_add(1, std::memory_order_relaxed);
+                apply_wait_strategy(strategy, spins);
             }
         }
     });
 
     std::thread consumer([&]() {
-        std::size_t count = 0;
+        std::size_t count = 0, spins = 0;
         ValueType value;
         while (count < N) {
             if (queue.try_pop(value)) {
                 ++count;
             } else {
-                std::this_thread::yield();
                 failedPops.fetch_add(1, std::memory_order_relaxed);
+                apply_wait_strategy(strategy, spins);
             }
         }
     });
@@ -223,12 +252,12 @@ ThroughputResult run_single_throughput_test() {
 }
 
 template<typename QueueType>
-void run_throughput_benchmark(std::string name, int iterations = 5) {
+void run_throughput_benchmark(const std::string& name, WaitStrategy strategy, int iterations = 5) {
     double totalOps = 0.0;
     std::size_t totalFailedPushes = 0;
     std::size_t totalFailedPops = 0;
     for (int i = 0; i < iterations; ++i) {
-        auto result = run_single_throughput_test<QueueType>();
+        auto result = run_single_throughput_test<QueueType>(strategy);
 
         totalOps += result.opsPerSec;
         totalFailedPushes += result.failedPushes;
@@ -241,7 +270,6 @@ void run_throughput_benchmark(std::string name, int iterations = 5) {
           << '\n';
     }
 
-    double average = totalOps / iterations;
     std::cout << name << " avg throughput: "
               << (totalOps / iterations) << " msgs/sec"
               << " | avg failed pushes: " << (totalFailedPushes / iterations)
@@ -249,15 +277,41 @@ void run_throughput_benchmark(std::string name, int iterations = 5) {
               << "\n\n";
 }
 
-int main() {
-    std::cout << "=== Throughput ===\n";
+int main()
+{
+    std::cout << "=== Throughput: Wait Strategy Comparison ===\n";
 
-    run_throughput_benchmark<RingBuffer<int, 1024>>("RingBuffer<int>");
-    run_throughput_benchmark<MutexQueue<int>>("MutexQueue<int>");
+    run_throughput_benchmark<RingBuffer<int, 1024>>(
+        "RingBuffer 1024 Spin",
+        WaitStrategy::Spin
+    );
 
-    std::cout << "\n=== Latency ===\n";
+    run_throughput_benchmark<RingBuffer<int, 1024>>(
+        "RingBuffer 1024 Yield",
+        WaitStrategy::Yield
+    );
 
-    run_latency_benchmark<RingBuffer<TimedMessage, 1024>>("RingBuffer 1024");
-    run_latency_benchmark<MutexQueue<TimedMessage>>("MutexQueue");
+    run_throughput_benchmark<RingBuffer<int, 1024>>(
+        "RingBuffer 1024 SpinThenYield",
+        WaitStrategy::SpinThenYield
+    );
+
+    std::cout << "\n=== Latency: Wait Strategy Comparison ===\n";
+
+    run_latency_benchmark<RingBuffer<TimedMessage, 1024>>(
+        "RingBuffer 1024 Spin",
+        WaitStrategy::Spin
+    );
+
+    run_latency_benchmark<RingBuffer<TimedMessage, 1024>>(
+        "RingBuffer 1024 Yield",
+        WaitStrategy::Yield
+    );
+
+    run_latency_benchmark<RingBuffer<TimedMessage, 1024>>(
+        "RingBuffer 1024 SpinThenYield",
+        WaitStrategy::SpinThenYield
+    );
+
     return 0;
 }
