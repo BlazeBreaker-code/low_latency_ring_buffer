@@ -1,8 +1,21 @@
 # Build artifacts
 build/
+out/
+bin/
 *.o
 *.obj
 *.exe
+*.out
+*.a
+*.so
+*.dylib
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
 
 # macOS
 .DS_Store
@@ -10,8 +23,11 @@ build/
 # VSCode
 .vscode/
 
-# CMake
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
+# Logs / temp
+*.log
+*.tmp
+*.swp
+
+# Optional: scripts outputs
+*.csv
+*.txt

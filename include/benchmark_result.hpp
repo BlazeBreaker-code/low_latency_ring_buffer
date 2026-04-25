@@ -4,7 +4,7 @@
 
 struct BenchmarkResult {
     double throughputOpsPerSec = 0.0;
-    
+
     double avgLatencyNs = 0.0;
     double p50Ns = 0.0;
     double p95Ns = 0.0;
