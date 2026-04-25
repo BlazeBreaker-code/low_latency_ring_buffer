@@ -32,10 +32,17 @@ class MutexQueue {
         std::mutex mutex_;
 };
 
+struct TimedMessage {
+    using clock = std::chrono::high_resolution_clock;
+
+    clock::time_point createdAt;
+    std::size_t sequence;
+};
+
 template<typename QueueType>
 double run_single_throughput_test() {
     using ValueType = typename QueueType::value_type;
-    const size_t N = 1'000'000;
+    const std::size_t N = 1'000'000;
     QueueType queue;
 
     std::atomic<std::size_t> failedPushes{0};
@@ -90,11 +97,59 @@ void run_throughput_test(std::string name, int iterations = 5) {
     std::cout << name << " avg throughput: " << average << " ops/sec\n\n";
 }
 
+template<typename QueueType>
+void run_latency_test(const std::string& name) {
+    using ValueType = typename QueueType::value_type;
+    const std::size_t N = 1'000'000;
+
+    QueueType queue;
+
+    std::atomic<std::size_t> count{0};
+    std::chrono::nanoseconds totalLatency{0};
+
+    std::thread producer([&]() {
+        for (std::size_t i = 0; i < N; ++i) {
+            ValueType msg {
+                ValueType::clock::now(),
+                i
+            };
+
+            while (!queue.try_push(msg)) {
+                std::this_thread::yield();
+            }
+        }
+    });
+
+    std::thread consumer([&]() {
+        ValueType msg {};
+
+        while (count < N) {
+            if (queue.try_pop(msg)) {
+                auto now = ValueType::clock::now();
+                totalLatency += (now - msg.createdAt);
+                ++count;
+            } else {
+                std::this_thread::yield();
+            }
+        }
+    });
+
+    producer.join();
+    consumer.join();
+
+    double avgLatencyNs = static_cast<double>(totalLatency.count() / N);
+    std::cout << name << " avg latency: " << avgLatencyNs << " ns\n\n";
+}
+
 int main() {
-    run_throughput_test<RingBuffer<int, 64>>("RingBuffer 64");
-    run_throughput_test<RingBuffer<int, 256>>("RingBuffer 256");
-    run_throughput_test<RingBuffer<int, 1024>>("RingBuffer 1024");
-    run_throughput_test<RingBuffer<int, 8192>>("RingBuffer 8192");
-    run_throughput_test<MutexQueue<int>>("MutexQueue");
+    std::cout << "=== Throughput ===\n";
+
+    run_throughput_test<RingBuffer<int, 1024>>("RingBuffer<int>");
+    run_throughput_test<MutexQueue<int>>("MutexQueue<int>");
+
+    std::cout << "\n=== Latency ===\n";
+
+    run_latency_test<RingBuffer<TimedMessage, 1024>>("RingBuffer<Timed>");
+    run_latency_test<MutexQueue<TimedMessage>>("MutexQueue<Timed>");
     return 0;
 }
