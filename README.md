@@ -77,6 +77,7 @@ Evaluates how buffer size affects:
 
 ## Wait Strategy Comparison
 
+```text
 === Throughput: Wait Strategy Comparison ===
 Benchmark msgs/s(M) fail_push fail_pop
 
@@ -90,13 +91,13 @@ Benchmark msgs/s(M) avg(ns) p50 p95 p99 p99.9 max
 Spin 17.77 1823.11 125.00 12875.40 26883.40 54758.40 72708.40
 Yield 19.70 8362.55 358.40 28099.60 44842.00 2075558.40 2091758.40
 SpinThenYield 17.14 8220.30 733.40 38841.40 71441.60 105408.20 145666.80
-
+```
 
 ---
 
 ## Capacity Sweep (SpinThenYield)
 
-
+```text
 === Throughput: Capacity Sweep ===
 64 -> 24.68M msgs/sec
 256 -> 22.46M msgs/sec
@@ -108,7 +109,7 @@ SpinThenYield 17.14 8220.30 733.40 38841.40 71441.60 105408.20 145666.80
 256 -> p99 ~8.5us
 1024 -> p99 ~23.7us
 8192 -> p99 ~30.7us
-
+```
 
 ---
 
