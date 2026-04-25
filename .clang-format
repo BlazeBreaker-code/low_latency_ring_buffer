@@ -1,17 +1,37 @@
 BasedOnStyle: LLVM
+
+# Core formatting
 IndentWidth: 4
 ColumnLimit: 100
+UseTab: Never
 
+# Braces (compact, modern)
 BreakBeforeBraces: Attach
 
+# Function / control flow readability
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: false
 
+# Pointer style
 PointerAlignment: Left
-SpaceBeforeParens: ControlStatements
 
+# Spacing
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# IMPORTANT: disable ugly alignment
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
 
+# Function call formatting (better for long benchmark calls)
 BinPackArguments: false
 BinPackParameters: false
+
+# Includes
+SortIncludes: true
+IncludeBlocks: Preserve
+
+# Switch/case (fix your issue)
+IndentCaseLabels: true
+IndentCaseBlocks: true
