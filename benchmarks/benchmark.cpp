@@ -193,6 +193,7 @@ int main() {
     run_throughput_benchmark<RingBuffer<int, 1024>>("Spin", WaitStrategy::Spin);
     run_throughput_benchmark<RingBuffer<int, 1024>>("Yield", WaitStrategy::Yield);
     run_throughput_benchmark<RingBuffer<int, 1024>>("SpinThenYield", WaitStrategy::SpinThenYield);
+    run_throughput_benchmark<RingBuffer<int, 1024>>("ExponentialBackoff", WaitStrategy::ExponentialBackoff);
 
     std::cout << "\n=== Latency: Wait Strategy Comparison ===\n";
     print_latency_header();
@@ -200,6 +201,7 @@ int main() {
     run_latency_benchmark<RingBuffer<TimedMessage, 1024>>("Spin", WaitStrategy::Spin);
     run_latency_benchmark<RingBuffer<TimedMessage, 1024>>("Yield", WaitStrategy::Yield);
     run_latency_benchmark<RingBuffer<TimedMessage, 1024>>("SpinThenYield", WaitStrategy::SpinThenYield);
+    run_latency_benchmark<RingBuffer<TimedMessage, 1024>>("ExponentialBackoff", WaitStrategy::ExponentialBackoff);
 
     std::cout << "\n=== Throughput: Capacity Sweep (SpinThenYield) ===\n";
     print_throughput_header();

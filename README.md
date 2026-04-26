@@ -99,6 +99,32 @@ SpinThenYield                    11.07    92333.90  91316.80 101749.80 112850.00
 
 --- 
 
+## Exponential Backoff Evaluation
+
+An exponential backoff strategy was introduced as an adaptive wait mechanism under contention.
+
+Unlike fixed strategies (Spin, Yield, SpinThenYield), this approach increases wait time after repeated failures, attempting to reduce contention by backing off more aggressively when the buffer is busy.
+
+```text
+=== Throughput: Wait Strategy Comparison ===
+Benchmark                    msgs/s(M)       fail_push        fail_pop
+----------------------------------------------------------------------
+Spin                             16.41              19         1921676
+Yield                            27.38             204           32985
+SpinThenYield                    24.55            1499          551720
+ExponentialBackoff               20.21            2645          327247
+
+=== Latency: Wait Strategy Comparison ===
+Benchmark                    msgs/s(M)     avg(ns)       p50       p95       p99       p99.9         max       fail_push        fail_pop
+----------------------------------------------------------------------------------------------------------------------------------------
+Spin                             10.88    93846.92  92441.60 106425.20 115458.20   130000.00   134708.60         1221062               0
+Yield                            13.01    78351.52  77100.00  88166.40  96366.60   123441.80   139583.20          214151               1
+SpinThenYield                    11.00    92853.83  92175.00 100424.80 110566.40   125058.40   128641.80         1150151               0
+ExponentialBackoff               10.45    98410.68  95683.60 120675.00 131950.00   149158.40   174291.60         1117606               5
+```
+
+---
+
 ## Capacity Sweep (SpinThenYield)
 
 ```text
@@ -205,25 +231,42 @@ Benchmarks are:
 
 ### Wait Strategy Tradeoffs
 - **Spin**
-  - lowest median and tail latency
-  - highest contention and CPU usage
+  - low median latency
+  - highest contention due to aggressive retrying
 - **Yield**
   - highest throughput
-  - large latency spikes due to scheduler interaction
+  - lowest overall latency in this workload due to better CPU sharing
 - **Spin-Then-Yield**
   - balanced approach
-  - reduces contention while maintaining reasonable latency
+  - reduces contention while maintaining stable latency
+- **Exponential Backoff**
+  - lower throughput and higher latency in this workload
+  - adaptive waiting increased delay under sustained contention
+
+> Simpler strategies can outperform adaptive ones when contention is continuous. Yield performed best by allowing faster coordination between threads.
+
+---
 
 ### Capacity Tradeoffs
 
 - **Small buffers**
-  - lower latency
-  - higher contention
+  - lower latency due to minimal queueing
+  - higher contention and backpressure
 - **Large buffers**
-  - higher throughput
-  - increased latency due to queueing
+  - slightly higher throughput
+  - significantly increased latency due to queueing delay
 
-> Larger buffers reduce backpressure but allow messages to wait longer before consumption, increasing tail latency.
+> Larger buffers reduce backpressure but allow the producer to run ahead, increasing queue depth and tail latency.
+
+---
+
+### Thread Affinity Effects
+
+- Pinning threads reduced scheduling variability and made behavior more consistent
+- More stable execution exposed queueing effects more clearly
+- Latency increased under larger buffers as producer-consumer imbalance became more consistent
+
+> Improved stability does not always reduce latency—removing scheduling noise can reveal underlying system imbalances.
 
 ---
 
@@ -271,7 +314,6 @@ basic_usage.cpp
 - NUMA-aware benchmarking
 - Cache line padding experiments
 - Lock-free memory reclamation strategies
-- CPU affinity pinning for more stable measurements
 
 ---
 
@@ -284,3 +326,9 @@ Low-latency systems require careful balancing of:
 - CPU utilization
 
 This project explores those tradeoffs through controlled experiments, providing insight into how synchronization strategies and buffer design impact real-world performance.
+
+---
+
+### Overall
+
+Throughput, latency, and contention are tightly coupled. Optimizing one often comes at the cost of another, and the best strategy depends on workload characteristics and system behavior.
