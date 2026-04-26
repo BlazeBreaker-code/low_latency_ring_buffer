@@ -81,8 +81,6 @@ Evaluates how buffer size affects:
 
 ## Wait Strategy Comparison
 
-## Wait Strategy Comparison
-
 ```text
 === Throughput: Wait Strategy Comparison ===
 Benchmark                    msgs/s(M)       fail_push        fail_pop
@@ -136,6 +134,44 @@ Benchmark                    p99(us)
 - Consumer thread processes messages
 - Configurable wait strategies control contention behavior
 - Results aggregated and printed in structured tables
+
+---
+
+# Why SPSC Matters
+
+This ring buffer is designed for single-producer single-consumer usage.
+
+Only the producer writes to `tail`, and only the consumer writes to `head`. Both threads may read the other index, but neither contends on writes to the same index.
+
+This ownership model keeps the implementation simpler and faster than a multi-producer multi-consumer queue, which requires additional coordination around shared writes, compare/exchange loops, and more complex contention handling.
+
+---
+
+# Memory Ordering
+
+The ring buffer uses acquire/release memory ordering to safely publish messages between producer and consumer without a mutex.
+
+Producer:
+1. Writes the message into the buffer slot.
+2. Release-stores the updated tail index.
+
+Consumer:
+1. Acquire-loads the tail index.
+2. If data is available, reads the message.
+
+The release/acquire pair guarantees that once the consumer observes the updated tail, it also observes the message written before that tail update.
+
+---
+
+# Thread Affinity
+
+The benchmark includes thread affinity support to reduce scheduling noise during measurement.
+
+Producer and consumer threads are assigned to separate cores when supported. This helps reduce thread migration, improves cache locality, and makes benchmark behavior more consistent.
+
+On macOS, strict CPU pinning is not exposed in the same way as Linux, so the implementation uses an affinity hint rather than a hard guarantee.
+
+In this benchmark, thread affinity exposed queueing behavior more clearly: with larger buffers, the producer can run ahead more consistently, causing messages to spend longer waiting in the queue.
 
 ---
 
