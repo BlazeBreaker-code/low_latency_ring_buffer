@@ -11,6 +11,7 @@
 #include "benchmark_result.hpp"
 #include "mutex_queue.hpp"
 #include "ring_buffer.hpp"
+#include "thread_affinity.hpp"
 #include "throughput_result.hpp"
 #include "wait_strategy.hpp"
 
@@ -38,6 +39,7 @@ template <typename QueueType> BenchmarkResult run_single_latency_test(WaitStrate
     auto start = std::chrono::steady_clock::now();
 
     std::thread producer([&]() {
+        pin_thread_to_core(0);
         for (std::size_t i = 0; i < message_count; ++i) {
             value_type msg{value_type::Clock::now(), i};
 
@@ -50,6 +52,7 @@ template <typename QueueType> BenchmarkResult run_single_latency_test(WaitStrate
     });
 
     std::thread consumer([&]() {
+        pin_thread_to_core(1);
         std::size_t consumed = 0, spin_count = 0;
         value_type msg{};
 
@@ -125,6 +128,7 @@ template <typename QueueType> ThroughputResult run_single_throughput_test(WaitSt
 
     auto start = std::chrono::steady_clock::now();
     std::thread producer([&]() {
+        pin_thread_to_core(0);
         for (std::size_t i = 0; i < message_count; ++i) {
             std::size_t spin_count = 0;
 
@@ -136,6 +140,7 @@ template <typename QueueType> ThroughputResult run_single_throughput_test(WaitSt
     });
 
     std::thread consumer([&]() {
+        pin_thread_to_core(1);
         std::size_t consumed = 0, spin_count = 0;
         value_type value;
         while (consumed < message_count) {
