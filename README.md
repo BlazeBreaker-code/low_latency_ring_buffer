@@ -8,12 +8,13 @@ This project explores how design decisions such as wait strategies and buffer ca
 
 # System Overview
 
+```text
           Producer Thread
                 |
                 | try_push(message)
                 v
       +----------------------+
-      |  Lock-Free RingBuffer |
+      | Lock-Free RingBuffer |
       |                      |
       |  [ ][ ][ ][ ][ ][ ]  |
       |   ^              ^   |
@@ -23,11 +24,13 @@ This project explores how design decisions such as wait strategies and buffer ca
                 | try_pop(message)
                 v
           Consumer Thread
+```
 
 The producer writes messages into the ring buffer using try_push, while the consumer reads messages using try_pop. The buffer uses atomic head/tail indices to coordinate between threads without a mutex.
 
 Wait Strategy Under Contention
 
+```text
 try_push / try_pop fails
           |
           v
@@ -38,6 +41,7 @@ try_push / try_pop fails
  | Yield            |  give CPU back to scheduler
  | SpinThenYield    |  spin briefly, then yield
  +------------------+
+```
  
 ---
 
@@ -93,7 +97,7 @@ Yield 19.70 8362.55 358.40 28099.60 44842.00 2075558.40 2091758.40
 SpinThenYield 17.14 8220.30 733.40 38841.40 71441.60 105408.20 145666.80
 ```
 
----
+--- 
 
 ## Capacity Sweep (SpinThenYield)
 
